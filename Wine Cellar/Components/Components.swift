@@ -107,14 +107,9 @@ struct RatingStarsView: View {
         HStack(spacing: 2) {
             ForEach(0..<5, id: \.self) { index in
                 let starValue = Double(index) + 1
-                let fill: Double
-                if rating >= starValue {
-                    fill = 1
-                } else if rating + 0.5 >= starValue {
-                    fill = 0.5
-                } else {
-                    fill = 0
-                }
+                let fill = rating >= starValue
+                    ? 1
+                    : (rating + 0.5 >= starValue ? 0.5 : 0)
                 StarShape(fill: fill)
                     .frame(width: 16, height: 16)
             }
