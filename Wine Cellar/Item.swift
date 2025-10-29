@@ -62,7 +62,7 @@ enum WineStyle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct DrinkWindow: Codable {
+struct DrinkWindow: Codable, Hashable {
     let from: Int?
     let to: Int?
 
@@ -80,7 +80,7 @@ struct DrinkWindow: Codable {
     }
 }
 
-struct WinePrice: Codable {
+struct WinePrice: Codable, Hashable {
     let amount: Double
     let currency: String
 
@@ -92,7 +92,7 @@ struct WinePrice: Codable {
     }
 }
 
-struct Wine: Identifiable, Codable {
+struct Wine: Identifiable, Codable, Hashable {
     let id: String
     let producer: String
     let name: String
