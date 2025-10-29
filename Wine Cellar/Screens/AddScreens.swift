@@ -257,7 +257,16 @@ private struct CaveoTextEditor: View {
 struct AddReviewView: View {
     @State private var toast: Toast?
 
-    private let exampleJSON: String = """\n{\n  \"producer\": \"Weingut Keller\",\n  \"wine\": \"Riesling von der Fels\",\n  \"vintage\": 2021,\n  \"style\": \"white\",\n  \"region\": \"Rheinhessen\",\n  \"notes\": \"Säure, Steinobst, Energie\"\n}\n"""
+    private let exampleJSON: String = """
+{
+  "producer": "Weingut Keller",
+  "wine": "Riesling von der Fels",
+  "vintage": 2021,
+  "style": "white",
+  "region": "Rheinhessen",
+  "notes": "Säure, Steinobst, Energie"
+}
+"""
 
     var body: some View {
         VStack(spacing: CaveoSpacing.l) {
