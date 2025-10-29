@@ -2,31 +2,26 @@
 //  Wine_CellarApp.swift
 //  Wine Cellar
 //
-//  Created by Liam Schmid on 29.10.25.
+//  Entry point for the Caveo mock experience.
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct Wine_CellarApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    @StateObject private var store = MockDataStore()
+    @StateObject private var themeManager = ThemeManager()
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    init() {
+        FontRegistrar.registerFonts()
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(store)
+                .environmentObject(themeManager)
+                .background(Color("Background"))
         }
-        .modelContainer(sharedModelContainer)
     }
 }
