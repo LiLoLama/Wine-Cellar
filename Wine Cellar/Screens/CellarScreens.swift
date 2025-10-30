@@ -10,41 +10,52 @@ import SwiftUI
 struct CellarListView: View {
     @EnvironmentObject private var store: MockDataStore
     @State private var searchText: String = ""
-    @State private var selectedFilter: CellarFilter = .all
-
-    private let filters: [CellarFilter] = [.all] + WineStyle.allCases.map { CellarFilter(style: $0) }
+    @State private var filterState = CellarFilterState()
+    @State private var isFilterSheetPresented = false
+    @State private var sortOption: CellarSortOption = .recentlyAdded
 
     var body: some View {
+        let filteredWines = filterState
+            .filteredWines(from: store, searchText: searchText)
+            .sorted(by: sortOption, store: store)
+
         ScrollView {
             VStack(alignment: .leading, spacing: CaveoSpacing.l) {
                 SearchBarView(text: $searchText, placeholder: "Produzent, Wein, Rebsorte …")
                     .padding(.top, CaveoSpacing.l)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: CaveoSpacing.s) {
-                        ForEach(filters) { filter in
-                            let isSelected = filter == selectedFilter
-                            CaveoChip(
-                                text: filter.label,
-                                icon: filter.icon,
-                                style: isSelected ? .filled(Color("Accent")) : .outline(Color("SecondaryText"))
-                            )
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedFilter = filter
-                                }
-                            }
-                        }
-                    }
                     .padding(.horizontal, CaveoSpacing.l)
-                }
+
+                QuickFilterStackView(
+                    groups: QuickFilterGroup.makeGroups(store: store),
+                    selectedFilters: $filterState.selectedQuickFilters
+                )
+                .padding(.horizontal, CaveoSpacing.l)
+
+                SortPickerView(sortOption: $sortOption)
+                    .padding(.horizontal, CaveoSpacing.l)
 
                 VStack(spacing: CaveoSpacing.l) {
-                    ForEach(store.wines) { wine in
-                        NavigationLink(value: wine) {
-                            WineListCard(wine: wine)
+                    if filteredWines.isEmpty {
+                        EmptyStateView(
+                            icon: "line.3.horizontal.decrease.circle",
+                            title: "Keine Treffer",
+                            subtitle: "Passe deine Filter oder die Suche an, um mehr Weine zu sehen.",
+                            actionTitle: "Filter zurücksetzen",
+                            action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    filterState = CellarFilterState()
+                                    searchText = ""
+                                }
+                            }
+                        )
+                        .padding(.top, CaveoSpacing.xl)
+                    } else {
+                        ForEach(filteredWines) { wine in
+                            NavigationLink(value: wine) {
+                                WineListCard(wine: wine)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, CaveoSpacing.l)
@@ -59,35 +70,109 @@ struct CellarListView: View {
         .navigationTitle("Keller")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {}) {
-                    Image(systemName: "slider.horizontal.3")
+                Button(action: { isFilterSheetPresented = true }) {
+                    Label(filterButtonTitle, systemImage: "slider.horizontal.3")
+                        .labelStyle(.titleAndIcon)
                 }
-                .tint(Color("PrimaryText"))
-                .opacity(0.5)
-                .disabled(true)
+                .tint(Color("Accent"))
+            }
+        }
+        .sheet(isPresented: $isFilterSheetPresented) {
+            NavigationStack {
+                FilterSheetView(
+                    filterState: $filterState,
+                    sortOption: $sortOption,
+                    store: store
+                )
+            }
+        }
+    }
+
+    private var filterButtonTitle: String {
+        let count = filterState.activeFilterCount
+        if count == 0 {
+            return "Filter"
+        }
+        return "Filter (\(count))"
+    }
+}
+
+private struct QuickFilterStackView: View {
+    let groups: [QuickFilterGroup]
+    @Binding var selectedFilters: Set<QuickFilterOption>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: CaveoSpacing.m) {
+            ForEach(groups) { group in
+                VStack(alignment: .leading, spacing: CaveoSpacing.s) {
+                    Text(group.title)
+                        .font(CaveoTypography.caption())
+                        .foregroundStyle(Color("SecondaryText"))
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: CaveoSpacing.s) {
+                            ForEach(group.options, id: \.self) { option in
+                                let isSelected = selectedFilters.contains(option)
+                                CaveoChip(
+                                    text: option.label,
+                                    icon: option.icon,
+                                    style: isSelected ? .filled(Color("Accent")) : .outline(Color("SecondaryText"))
+                                )
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        if isSelected {
+                                            selectedFilters.remove(option)
+                                        } else {
+                                            selectedFilters.insert(option)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-private struct CellarFilter: Identifiable, Equatable {
-    let id = UUID()
-    let label: String
-    let icon: String?
-    let style: WineStyle?
+private struct SortPickerView: View {
+    @Binding var sortOption: CellarSortOption
 
-    static let all = CellarFilter(label: "Alle", icon: "line.3.horizontal.decrease.circle", style: nil)
+    var body: some View {
+        HStack {
+            Text("Sortierung")
+                .font(CaveoTypography.caption())
+                .foregroundStyle(Color("SecondaryText"))
 
-    init(label: String, icon: String?, style: WineStyle?) {
-        self.label = label
-        self.icon = icon
-        self.style = style
-    }
+            Spacer()
 
-    init(style: WineStyle) {
-        self.label = style.displayName
-        self.icon = style.icon
-        self.style = style
+            Menu {
+                Picker("Sortierung", selection: $sortOption) {
+                    ForEach(CellarSortOption.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+            } label: {
+                HStack(spacing: CaveoSpacing.xs) {
+                    Text(sortOption.label)
+                        .font(CaveoTypography.bodySecondary())
+                        .foregroundStyle(Color("PrimaryText"))
+                    Image(systemName: "arrow.up.arrow.down")
+                        .foregroundStyle(Color("SecondaryText"))
+                }
+                .padding(.vertical, CaveoSpacing.xs)
+                .padding(.horizontal, CaveoSpacing.s)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color("Surface"))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color("Border"), lineWidth: 1)
+                )
+            }
+        }
     }
 }
 
