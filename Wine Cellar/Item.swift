@@ -153,10 +153,12 @@ struct OpenBottle: Identifiable, Codable {
     }
 }
 
-enum PreservationMethod: String, Codable {
+enum PreservationMethod: String, Codable, CaseIterable, Identifiable {
     case cork
     case vacuum
     case argon
+
+    var id: Self { self }
 
     var label: String {
         switch self {
