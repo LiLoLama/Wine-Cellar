@@ -31,7 +31,7 @@ struct FilterSheetView: View {
             metadataSection
         }
         .scrollIndicators(.hidden)
-        .navigationTitle("Filter")
+        .navigationTitle("Erweiterte Filter")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button("Zurücksetzen") {
@@ -102,7 +102,8 @@ struct FilterSheetView: View {
                 title: "Jahrgang",
                 range: advancedBinding.vintageRange,
                 bounds: vintageBounds,
-                formatter: { "\($0)" }
+                formatter: { "\($0)" },
+                style: .picker
             )
 
             RangeDoubleInputView(
@@ -239,19 +240,22 @@ struct FilterSheetView: View {
 
     private var ratingSection: some View {
         Section("E. Bewertung & Erlebnis") {
-            Slider(
+            StarRatingSelector(
+                title: "Gesamtbewertung (min.)",
                 value: Binding(
-                    get: { advanced.minRating ?? 0 },
+                    get: {
+                        guard let minRating = advanced.minRating, minRating >= 1 else { return nil }
+                        return Int(minRating)
+                    },
                     set: { newValue in
-                        advancedBinding.minRating.wrappedValue = newValue == 0 ? nil : newValue
+                        if let newValue {
+                            advancedBinding.minRating.wrappedValue = Double(newValue)
+                        } else {
+                            advancedBinding.minRating.wrappedValue = nil
+                        }
                     }
-                ),
-                in: 0...5,
-                step: 0.5
-            ) {
-                Text("Gesamtbewertung (min.)")
-            }
-            .accessibilityValue(Text(String(format: "%.1f", advanced.minRating ?? 0)))
+                )
+            )
 
             Picker("Bewertet?", selection: Binding(
                 get: { advanced.isRated == nil ? -1 : (advanced.isRated == true ? 1 : 0) },
@@ -374,7 +378,8 @@ struct FilterSheetView: View {
     private var vintageBounds: ClosedRange<Int> {
         let years = store.wines.compactMap { $0.vintage }
         let minYear = years.min() ?? 1980
-        let maxYear = years.max() ?? Calendar.current.component(.year, from: Date())
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let maxYear = max(years.max() ?? currentYear, currentYear)
         return minYear...maxYear
     }
 
@@ -520,10 +525,16 @@ private struct IntMultiSelectionView: View {
 }
 
 private struct RangeInputView: View {
+    enum InputStyle {
+        case stepper
+        case picker
+    }
+
     let title: String
     @Binding var range: ClosedRange<Int>?
     let bounds: ClosedRange<Int>
     let formatter: (Int) -> String
+    var style: InputStyle = .stepper
 
     var body: some View {
         VStack(alignment: .leading, spacing: CaveoSpacing.xs) {
@@ -541,25 +552,121 @@ private struct RangeInputView: View {
             }
 
             if let bindingRange = optionalBinding($range) {
-                HStack {
-                    Stepper(value: Binding(
-                        get: { bindingRange.wrappedValue.lowerBound },
-                        set: { newValue in
-                            let upper = max(newValue, bindingRange.wrappedValue.upperBound)
-                            bindingRange.wrappedValue = newValue...upper
+                switch style {
+                case .stepper:
+                    HStack {
+                        Stepper(value: Binding(
+                            get: { bindingRange.wrappedValue.lowerBound },
+                            set: { newValue in
+                                let upper = max(newValue, bindingRange.wrappedValue.upperBound)
+                                bindingRange.wrappedValue = newValue...upper
+                            }
+                        ), in: bounds) {
+                            Text("Von \(formatter(bindingRange.wrappedValue.lowerBound))")
                         }
-                    ), in: bounds) {
-                        Text("Von \(formatter(bindingRange.wrappedValue.lowerBound))")
-                    }
-                    Stepper(value: Binding(
-                        get: { bindingRange.wrappedValue.upperBound },
-                        set: { newValue in
-                            let lower = min(newValue, bindingRange.wrappedValue.lowerBound)
-                            bindingRange.wrappedValue = lower...newValue
+                        Stepper(value: Binding(
+                            get: { bindingRange.wrappedValue.upperBound },
+                            set: { newValue in
+                                let lower = min(newValue, bindingRange.wrappedValue.lowerBound)
+                                bindingRange.wrappedValue = lower...newValue
+                            }
+                        ), in: bounds) {
+                            Text("Bis \(formatter(bindingRange.wrappedValue.upperBound))")
                         }
-                    ), in: bounds) {
-                        Text("Bis \(formatter(bindingRange.wrappedValue.upperBound))")
                     }
+                case .picker:
+                    PickerRangeView(
+                        bounds: bounds,
+                        formatter: formatter,
+                        range: bindingRange
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct PickerRangeView: View {
+    let bounds: ClosedRange<Int>
+    let formatter: (Int) -> String
+    @Binding var range: ClosedRange<Int>
+
+    private var values: [Int] {
+        Array(bounds)
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: CaveoSpacing.m) {
+            pickerColumn(
+                title: "Von",
+                selection: Binding(
+                    get: { range.lowerBound },
+                    set: { newValue in
+                        let clamped = max(bounds.lowerBound, min(newValue, bounds.upperBound))
+                        let upper = max(clamped, range.upperBound)
+                        range = clamped...upper
+                    }
+                )
+            )
+
+            pickerColumn(
+                title: "Bis",
+                selection: Binding(
+                    get: { range.upperBound },
+                    set: { newValue in
+                        let clamped = max(bounds.lowerBound, min(newValue, bounds.upperBound))
+                        let lower = min(clamped, range.lowerBound)
+                        range = lower...clamped
+                    }
+                )
+            )
+        }
+        .frame(maxHeight: 160)
+    }
+
+    @ViewBuilder
+    private func pickerColumn(title: String, selection: Binding<Int>) -> some View {
+        VStack(alignment: .leading, spacing: CaveoSpacing.xs) {
+            Text(title)
+                .font(CaveoTypography.caption())
+                .foregroundStyle(Color("SecondaryText"))
+
+            Picker(title, selection: selection) {
+                ForEach(values, id: \.self) { value in
+                    Text(formatter(value)).tag(value)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.wheel)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct StarRatingSelector: View {
+    let title: String
+    @Binding var value: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: CaveoSpacing.xs) {
+            Text(title)
+            HStack(spacing: CaveoSpacing.s) {
+                ForEach(1...5, id: \.self) { rating in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if value == rating {
+                                value = nil
+                            } else {
+                                value = rating
+                            }
+                        }
+                    } label: {
+                        Image(systemName: rating <= (value ?? 0) ? "star.fill" : "star")
+                            .font(.title3)
+                            .foregroundStyle(rating <= (value ?? 0) ? Color("Accent") : Color("SecondaryText"))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("\(rating) Sterne"))
                 }
             }
         }
