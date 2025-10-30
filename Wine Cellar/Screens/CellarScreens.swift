@@ -13,6 +13,7 @@ struct CellarListView: View {
     @State private var filterState = CellarFilterState()
     @State private var isFilterSheetPresented = false
     @State private var sortOption: CellarSortOption = .recentlyAdded
+    @State private var isQuickFilterExpanded = true
 
     var body: some View {
         let filteredWines = filterState
@@ -25,10 +26,32 @@ struct CellarListView: View {
                     .padding(.top, CaveoSpacing.l)
                     .padding(.horizontal, CaveoSpacing.l)
 
-                QuickFilterStackView(
-                    groups: QuickFilterGroup.makeGroups(store: store),
-                    selectedFilters: $filterState.selectedQuickFilters
-                )
+                VStack(alignment: .leading, spacing: CaveoSpacing.s) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isQuickFilterExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: CaveoSpacing.xs) {
+                            Text("Quick Filter")
+                                .font(CaveoTypography.bodyEmphasized())
+                                .foregroundStyle(Color("PrimaryText"))
+                            Spacer()
+                            Image(systemName: isQuickFilterExpanded ? "chevron.up" : "chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(Color("SecondaryText"))
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if isQuickFilterExpanded {
+                        QuickFilterStackView(
+                            groups: QuickFilterGroup.makeGroups(store: store),
+                            selectedFilters: $filterState.selectedQuickFilters
+                        )
+                        .transition(.opacity.combined(with: .slide))
+                    }
+                }
                 .padding(.horizontal, CaveoSpacing.l)
 
                 SortPickerView(sortOption: $sortOption)
@@ -91,9 +114,9 @@ struct CellarListView: View {
     private var filterButtonTitle: String {
         let count = filterState.activeFilterCount
         if count == 0 {
-            return "Filter"
+            return "Erweiterte Filter"
         }
-        return "Filter (\(count))"
+        return "Erweiterte Filter (\(count))"
     }
 }
 
